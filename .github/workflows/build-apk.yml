@@ -4,18 +4,27 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-apk:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Extract ZIP
+      - name: Unzip Game Project
         run: |
-          mkdir -p app
-          unzip -o arrow-puzzle.zip -d app
-          find app -maxdepth 3 -type f | head -100
+          rm -rf extracted
+          mkdir extracted
+          unzip -o arrow-puzzle.zip -d extracted
+
+          echo "=== Extracted files ==="
+          find extracted -maxdepth 4 -type f | head -200
+
+      - name: Find Project Folder
+        run: |
+          PROJECT=$(find extracted -name package.json -type f -print -quit | xargs dirname)
+          echo "PROJECT=$PROJECT" >> $GITHUB_ENV
+          echo "Project folder: $PROJECT"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -28,22 +37,35 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Install dependencies
-        working-directory: app
+      - name: Install Dependencies
+        working-directory: ${{ env.PROJECT }}
         run: npm install
 
-      - name: Build web app
-        working-directory: app
+      - name: Build Game
+        working-directory: ${{ env.PROJECT }}
         run: npm run build
 
+      - name: Find Android Project
+        run: |
+          ANDROID=$(find "$PROJECT" -type f -name gradlew -print -quit | xargs dirname)
+
+          if [ -z "$ANDROID" ]; then
+            echo "Android project not found."
+            exit 1
+          fi
+
+          echo "ANDROID=$ANDROID" >> $GITHUB_ENV
+          echo "Android project: $ANDROID"
+
       - name: Build Android APK
-        working-directory: app/android
+        working-directory: ${{ env.ANDROID }}
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Arrow-Puzzle-APK
-          path: app/android/app/build/outputs/apk/**/*.apk
+          path: ${{ env.ANDROID }}/app/build/outputs/apk/**/*.apk
+          if-no-files-found: error
