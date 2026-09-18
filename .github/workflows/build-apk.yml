@@ -1,0 +1,49 @@
+name: Build Arrow Puzzle APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract ZIP
+        run: |
+          mkdir -p app
+          unzip -o arrow-puzzle.zip -d app
+          find app -maxdepth 3 -type f | head -100
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install dependencies
+        working-directory: app
+        run: npm install
+
+      - name: Build web app
+        working-directory: app
+        run: npm run build
+
+      - name: Build Android APK
+        working-directory: app/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Arrow-Puzzle-APK
+          path: app/android/app/build/outputs/apk/**/*.apk
